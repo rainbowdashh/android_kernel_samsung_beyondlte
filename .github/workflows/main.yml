@@ -1,0 +1,35 @@
+name: build and release
+
+on:
+  workflow_dispatch:
+    inputs:      
+      tag:
+        description: 'Release'
+        required: true        
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check Out
+        uses: actions/checkout@v3
+  
+      - name: Setup KernelSU
+        run: |
+          if [ -d "./KernelSU" ]; then
+            rm -rf "./KernelSU"
+          fi
+          if [ -d "./drivers/kernelsu" ]; then
+            rm -rf "./drivers/kernelsu"
+          fi
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
+
+      - name: Build
+        run: ./build.sh d2x N
+        
+      - name: Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: build
+          path: ${{ github.workspace }}/build/
