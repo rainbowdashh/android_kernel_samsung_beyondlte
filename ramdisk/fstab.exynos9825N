@@ -5,9 +5,11 @@
 
 #<src>  <mnt_point>     <type>  <mnt_flags and options> <fs_mgr_flags>
 /dev/block/platform/13d60000.ufs/by-name/system	/system	ext4	ro	wait,first_stage_mount
+/dev/block/platform/13d60000.ufs/by-name/system	/system	erofs	ro	wait,first_stage_mount
 /dev/block/platform/13d60000.ufs/by-name/cache	/product	ext4	ro	wait,first_stage_mount
+/dev/block/platform/13d60000.ufs/by-name/cache	/product	erofs	ro	wait,first_stage_mount
 /dev/block/platform/13d60000.ufs/by-name/vendor	/vendor	ext4	ro	wait,first_stage_mount
-
+/dev/block/platform/13d60000.ufs/by-name/vendor	/vendor	erofs	ro	wait,first_stage_mount
 /dev/block/platform/13d60000.ufs/by-name/product	/cache	ext4	noatime,nosuid,nodev,noauto_da_alloc,discard,journal_checksum,data=ordered,errors=panic	wait,check
 /dev/block/platform/13d60000.ufs/by-name/userdata	/data	f2fs	noatime,nosuid,nodev,discard,usrquota,grpquota,fsync_mode=nobarrier,reserve_root=32768,resgid=5678	wait,check,quota,reservedsize=128M
 /dev/block/platform/13d60000.ufs/by-name/efs	/mnt/vendor/efs	ext4	noatime,nosuid,nodev,noauto_da_alloc,discard,journal_checksum,data=ordered,errors=panic	wait,check

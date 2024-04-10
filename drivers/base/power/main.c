@@ -131,9 +131,11 @@ void device_pm_add(struct device *dev)
 		 dev->bus ? dev->bus->name : "No Bus", dev_name(dev));
 	device_pm_check_callbacks(dev);
 	mutex_lock(&dpm_list_mtx);
+#if 0
 	if (dev->parent && dev->parent->power.is_prepared)
 		dev_warn(dev, "parent %s should not be sleeping\n",
 			dev_name(dev->parent));
+#endif
 	list_add_tail(&dev->power.entry, &dpm_list);
 	dev->power.in_dpm_list = true;
 	mutex_unlock(&dpm_list_mtx);
@@ -761,6 +763,9 @@ void dpm_resume_early(pm_message_t state)
 	trace_suspend_resume(TPS("dpm_resume_early"), state.event, true);
 	dbg_snapshot_suspend("dpm_resume_early", dpm_resume_early,
 				NULL, state.event, DSS_FLAG_IN);
+#ifdef CONFIG_BOEFFLA_WL_BLOCKER
+	pm_print_active_wakeup_sources();
+#endif
 	mutex_lock(&dpm_list_mtx);
 	pm_transition = state;
 
