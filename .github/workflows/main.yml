@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Check Out
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
   
       - name: Setup KernelSU
         run: |
@@ -29,7 +29,7 @@ jobs:
         run: ./build.sh d2x N
         
       - name: Artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: build
           path: ${{ github.workspace }}/build/
