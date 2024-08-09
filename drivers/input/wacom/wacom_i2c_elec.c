@@ -17,9 +17,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <linux/i2c.h>
-#include "wacom.h"
-
+#include "wacom_dev.h"
 
 long long median(long long* arr, int length)
 {
@@ -136,11 +134,10 @@ int calibration_trx_data(struct wacom_i2c *wac_i2c)
 {
 	struct wacom_elec_data *edata = wac_i2c->pdata->edata;
 	long long *cal_xx_raw, *cal_xy_raw, *cal_yx_raw, *cal_yy_raw;
-	long long cal_xx, cal_xy, cal_yx, cal_yy;
 	int i;
 
 	cal_xx_raw = cal_xy_raw = cal_yx_raw = cal_yy_raw = NULL;
-	cal_xx = cal_xy = cal_yx = cal_yy = 0;
+	edata->cal_xx = edata->cal_xy = edata->cal_yx = edata->cal_yy = 0;
 
 	cal_xx_raw = kzalloc(edata->max_x_ch * sizeof(long long), GFP_KERNEL);
 	cal_xy_raw = kzalloc(edata->max_x_ch * sizeof(long long), GFP_KERNEL);
@@ -166,7 +163,7 @@ int calibration_trx_data(struct wacom_i2c *wac_i2c)
 
 	for (i = 0; i < edata->max_y_ch; i++) {
 		cal_yx_raw[i] = edata->yx_ref[i] * POWER_OFFSET / edata->yx[i];
-		cal_yy_raw[i] = edata->yx_ref[i] * POWER_OFFSET / edata->yx[i];
+		cal_yy_raw[i] = edata->yy_ref[i] * POWER_OFFSET / edata->yy[i];
 	}
 
 	hampel(cal_xx_raw, edata->max_x_ch, 3, 3);
@@ -174,20 +171,23 @@ int calibration_trx_data(struct wacom_i2c *wac_i2c)
 	hampel(cal_yx_raw, edata->max_y_ch, 3, 3);
 	hampel(cal_yy_raw, edata->max_y_ch, 3, 3);
 
-	cal_xx = mean(cal_xx_raw, edata->max_x_ch);
-	cal_xy = mean(cal_xy_raw, edata->max_x_ch);
-	cal_yx = mean(cal_yx_raw, edata->max_y_ch);
-	cal_yy = mean(cal_yy_raw, edata->max_y_ch);
+	edata->cal_xx = mean(cal_xx_raw, edata->max_x_ch);
+	edata->cal_xy = mean(cal_xy_raw, edata->max_x_ch);
+	edata->cal_yx = mean(cal_yx_raw, edata->max_y_ch);
+	edata->cal_yy = mean(cal_yy_raw, edata->max_y_ch);
 
 	for (i = 0; i < edata->max_x_ch; i++) {
-		edata->xx_xx[i] = cal_xx * edata->xx[i];
-		edata->xy_xy[i] = cal_xy * edata->xy[i];
+		edata->xx_xx[i] = edata->cal_xx * edata->xx[i];
+		edata->xy_xy[i] = edata->cal_xy * edata->xy[i];
 	}
 
 	for (i = 0; i < edata->max_y_ch; i++) {
-		edata->yx_yx[i] = cal_yx * edata->yx[i];
-		edata->yy_yy[i] = cal_yy * edata->yy[i];
+		edata->yx_yx[i] = edata->cal_yx * edata->yx[i];
+		edata->yy_yy[i] = edata->cal_yy * edata->yy[i];
 	}
+
+	input_info(true, &wac_i2c->client->dev, "%s: cal_xx(%lld), cal_xy(%lld), cal_yx(%lld), cal_yy(%lld)\n", 
+			__func__, edata->cal_xx, edata->cal_xy, edata->cal_yx, edata->cal_yy);
 
 	kfree(cal_xx_raw);
 	kfree(cal_xy_raw);
@@ -196,117 +196,36 @@ int calibration_trx_data(struct wacom_i2c *wac_i2c)
 
 	return 0;
 }
-/*
-int cal_xy(struct wacom_i2c *wac_i2c)
-{
-	struct wacom_elec_data *edata = wac_i2c->pdata->edata;
-	long long *cal_xy_raw = NULL;
-	long long cal_xy = 0;
-	int i;
 
-	cal_xy_raw = kzalloc(edata->max_x_ch * sizeof(long long), GFP_KERNEL);
-	if (!cal_xy_raw)
-		return -ENOMEM;
-
-	for (i = 0; i < edata->max_x_ch; i++)
-		cal_xy_raw[i] = edata->xy_ref[i] * POWER_OFFSET / edata->xy[i];
-
-	hampel(cal_xy_raw, edata->max_x_ch, 3, 3);
-
-	cal_xy = mean(cal_xy_raw, edata->max_x_ch);
-
-	for (i = 0; i < edata->max_x_ch; i++)
-		edata->xy_xy[i] = cal_xy * edata->xy[i];
-
-	kfree(cal_xy_raw);
-
-	return 0;
-}
-
-int cal_yx(struct wacom_i2c *wac_i2c)
-{
-	struct wacom_elec_data *edata = wac_i2c->pdata->edata;
-	long long *cal_yx_raw = NULL;
-	long long cal_yx = 0;
-	int i;
-
-	cal_yx_raw = kzalloc(edata->max_y_ch * sizeof(long long), GFP_KERNEL);
-	if (!cal_yx_raw)
-		return -ENOMEM;
-
-	for (i = 0; i < edata->max_y_ch; i++)
-		cal_yx_raw[i] = edata->yx_ref[i] * POWER_OFFSET / edata->yx[i];
-
-	hampel(cal_yx_raw, edata->max_y_ch, 3, 3);
-
-	cal_yx = mean(cal_yx_raw, edata->max_y_ch);
-
-	for (i = 0; i < edata->max_y_ch; i++)
-		edata->yx_yx[i] = cal_yx * edata->yx[i];
-
-	kfree(cal_yx_raw);
-
-	return 0;
-}
-
-int cal_yy(struct wacom_i2c *wac_i2c)
-{
-	struct wacom_elec_data *edata = wac_i2c->pdata->edata;
-	long long *cal_yy_raw = NULL;
-	long long cal_yy = 0;
-	int i;
-
-	cal_yy_raw = kzalloc(edata->max_y_ch * sizeof(long long), GFP_KERNEL);
-	if (!cal_yy_raw)
-		return -ENOMEM;
-
-	for (i = 0; i < edata->max_y_ch; i++)
-		cal_yy_raw[i] = edata->yy_ref[i] * POWER_OFFSET / edata->yy[i];
-
-	hampel(cal_yy_raw, edata->max_y_ch, 3, 3);
-
-	cal_yy = mean(cal_yy_raw, edata->max_y_ch);
-
-	for (i = 0; i < edata->max_y_ch; i++)
-		edata->yy_yy[i] = cal_yy * edata->yy[i];
-
-	kfree(cal_yy_raw);
-
-	return 0;
-}
-*/
 void calculate_ratio(struct wacom_i2c *wac_i2c)
 {
 	struct wacom_elec_data *edata = wac_i2c->pdata->edata;
 	int i;
 
-	edata->rxx[0] = edata->xx[1] * POWER_OFFSET / edata->xx[0];
-	for (i = 1; i < edata->max_x_ch; i++)
-		edata->rxx[i] = edata->xx[i - 1] * POWER_OFFSET / edata->xx[i];
+	for (i = 0; i < edata->max_x_ch; i++)
+		edata->rxx[i] = edata->xx_ref[i] * POWER_OFFSET / edata->xx[i];
 
-	edata->rxy[0] = edata->xy[1] * POWER_OFFSET / edata->xy[0];
-	for (i = 1; i < edata->max_x_ch; i++)
-		edata->rxy[i] = edata->xy[i - 1] * POWER_OFFSET / edata->xy[i];
+	for (i = 0; i < edata->max_x_ch; i++)
+		edata->rxy[i] = edata->xy_ref[i] * POWER_OFFSET / edata->xy[i];
 
-	edata->ryx[0] = edata->yx[1] * POWER_OFFSET / edata->yx[0];
-	for (i = 1; i < edata->max_y_ch; i++)
-		edata->ryx[i] = edata->yx[i - 1] * POWER_OFFSET / edata->yx[i];
+	for (i = 0; i < edata->max_y_ch; i++)
+		edata->ryx[i] = edata->yx_ref[i] * POWER_OFFSET / edata->yx[i];
 
-	edata->ryy[0] = edata->yy[1] * POWER_OFFSET / edata->yy[0];
-	for (i = 1; i < edata->max_y_ch; i++)
-		edata->ryy[i] = edata->yy[i - 1] * POWER_OFFSET / edata->yy[i];
+	for (i = 0; i < edata->max_y_ch; i++)
+		edata->ryy[i] = edata->yy_ref[i] * POWER_OFFSET / edata->yy[i];
+
 }
 
-void make_decision(struct wacom_i2c *wac_i2c, u16* arrResult)
+void make_decision(struct wacom_i2c* wac_i2c, u16* arrResult)
 {
-	struct wacom_elec_data *edata = wac_i2c->pdata->edata;
+	struct wacom_elec_data* edata = wac_i2c->pdata->edata;
 	u32 open_count, short_count;
 	int i;
 
 	open_count = short_count = 0;
 	for (i = 0; i < edata->max_x_ch; i++) {
-		edata->drxx[i] = edata->rxx[i] - edata->rxx_ref[i];
-		edata->drxy[i] = edata->rxy[i] - edata->rxy_ref[i];
+		edata->drxx[i] = edata->rxx[i] - edata->cal_xx;
+		edata->drxy[i] = edata->rxy[i] - edata->cal_xy;
 
 		if (edata->xy[i] < edata->xy_ref[i] / 2 || edata->xx[i] < edata->xx_ref[i] / 2) {
 			arrResult[i + 1] |= SEC_OPEN;
@@ -327,8 +246,8 @@ void make_decision(struct wacom_i2c *wac_i2c, u16* arrResult)
 	}
 
 	for (i = 0; i < edata->max_y_ch; i++) {
-		edata->dryy[i] = edata->ryy[i] - edata->ryy_ref[i];
-		edata->dryx[i] = edata->ryx[i] - edata->ryx_ref[i];
+		edata->dryy[i] = edata->ryy[i] - edata->cal_yy;
+		edata->dryx[i] = edata->ryx[i] - edata->cal_yx;
 
 		if (edata->yx[i] < edata->yx_ref[i] / 2 || edata->yy[i] < edata->yy_ref[i] / 2) {
 			arrResult[i + 1 + edata->max_x_ch] |= SEC_OPEN;
@@ -396,7 +315,7 @@ void print_elec_data(struct wacom_i2c *wac_i2c)
 
 		for (j = 0; j < chsize; j++) {
 			snprintf(ptmp, sizeof(ptmp), " %4d",
-				 edata->elec_data[(i * chsize) + j]);
+					edata->elec_data[(i * chsize) + j]);
 
 			strlcat(pstr, ptmp, lsize);
 		}
@@ -497,7 +416,7 @@ void print_cal_trx_data(struct wacom_i2c *wac_i2c)
 	memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 
 	for (i = 0; i < edata->max_x_ch; i++) {
-		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%ld ", edata->xx_xx[i]);
+		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%lld ", edata->xx_xx[i]);
 		strlcat(buff, tmp_buf, buff_size);
 		memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 	}
@@ -510,7 +429,7 @@ void print_cal_trx_data(struct wacom_i2c *wac_i2c)
 	memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 
 	for (i = 0; i < edata->max_x_ch; i++) {
-		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%ld ", edata->xy_xy[i]);
+		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%lld ", edata->xy_xy[i]);
 		strlcat(buff, tmp_buf, buff_size);
 		memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 	}
@@ -523,7 +442,7 @@ void print_cal_trx_data(struct wacom_i2c *wac_i2c)
 	memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 
 	for (i = 0; i < edata->max_y_ch; i++) {
-		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%ld ", edata->yx_yx[i]);
+		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%lld ", edata->yx_yx[i]);
 		strlcat(buff, tmp_buf, buff_size);
 		memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 	}
@@ -536,7 +455,7 @@ void print_cal_trx_data(struct wacom_i2c *wac_i2c)
 	memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 
 	for (i = 0; i < edata->max_y_ch; i++) {
-		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%ld ", edata->yy_yy[i]);
+		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%lld ", edata->yy_yy[i]);
 		strlcat(buff, tmp_buf, buff_size);
 		memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 	}
@@ -568,7 +487,7 @@ void print_ratio_trx_data(struct wacom_i2c *wac_i2c)
 	memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 
 	for (i = 0; i < edata->max_x_ch; i++) {
-		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%ld ", edata->rxx[i]);
+		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%lld ", edata->rxx[i]);
 		strlcat(buff, tmp_buf, buff_size);
 		memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 	}
@@ -581,7 +500,7 @@ void print_ratio_trx_data(struct wacom_i2c *wac_i2c)
 	memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 
 	for (i = 0; i < edata->max_x_ch; i++) {
-		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%ld ", edata->rxy[i]);
+		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%lld ", edata->rxy[i]);
 		strlcat(buff, tmp_buf, buff_size);
 		memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 	}
@@ -594,7 +513,7 @@ void print_ratio_trx_data(struct wacom_i2c *wac_i2c)
 	memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 
 	for (i = 0; i < edata->max_y_ch; i++) {
-		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%ld ", edata->ryx[i]);
+		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%lld ", edata->ryx[i]);
 		strlcat(buff, tmp_buf, buff_size);
 		memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 	}
@@ -607,7 +526,7 @@ void print_ratio_trx_data(struct wacom_i2c *wac_i2c)
 	memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 
 	for (i = 0; i < edata->max_y_ch; i++) {
-		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%ld ", edata->ryy[i]);
+		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%lld ", edata->ryy[i]);
 		strlcat(buff, tmp_buf, buff_size);
 		memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 	}
@@ -639,7 +558,7 @@ void print_difference_ratio_trx_data(struct wacom_i2c *wac_i2c)
 	memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 
 	for (i = 0; i < edata->max_x_ch; i++) {
-		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%ld ", edata->drxx[i]);
+		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%lld ", edata->drxx[i]);
 		strlcat(buff, tmp_buf, buff_size);
 		memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 	}
@@ -652,7 +571,7 @@ void print_difference_ratio_trx_data(struct wacom_i2c *wac_i2c)
 	memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 
 	for (i = 0; i < edata->max_x_ch; i++) {
-		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%ld ", edata->drxy[i]);
+		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%lld ", edata->drxy[i]);
 		strlcat(buff, tmp_buf, buff_size);
 		memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 	}
@@ -665,7 +584,7 @@ void print_difference_ratio_trx_data(struct wacom_i2c *wac_i2c)
 	memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 
 	for (i = 0; i < edata->max_y_ch; i++) {
-		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%ld ", edata->dryx[i]);
+		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%lld ", edata->dryx[i]);
 		strlcat(buff, tmp_buf, buff_size);
 		memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 	}
@@ -678,7 +597,7 @@ void print_difference_ratio_trx_data(struct wacom_i2c *wac_i2c)
 	memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 
 	for (i = 0; i < edata->max_y_ch; i++) {
-		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%ld ", edata->dryy[i]);
+		snprintf(tmp_buf, CMD_RESULT_WORD_LEN, "%lld ", edata->dryy[i]);
 		strlcat(buff, tmp_buf, buff_size);
 		memset(tmp_buf, 0x00, CMD_RESULT_WORD_LEN);
 	}
