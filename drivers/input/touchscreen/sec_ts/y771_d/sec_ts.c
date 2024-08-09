@@ -3591,7 +3591,6 @@ static int sec_ts_pm_resume(struct device *dev)
 #ifdef CONFIG_SAMSUNG_TUI
 extern int stui_i2c_lock(struct i2c_adapter *adap);
 extern int stui_i2c_unlock(struct i2c_adapter *adap);
-extern void epen_disable_mode(int mode);
 
 int stui_tsp_enter(void)
 {
@@ -3599,9 +3598,6 @@ int stui_tsp_enter(void)
 
 	if (!tsp_info)
 		return -EINVAL;
-
-	/* Disable wacom interrupt during tui */
-	epen_disable_mode(1);
 
 	disable_irq(tsp_info->client->irq);
 	sec_ts_unlocked_release_all_finger(tsp_info);
@@ -3628,9 +3624,6 @@ int stui_tsp_exit(void)
 		pr_err("[STUI] stui_i2c_unlock failed : %d\n", ret);
 
 	enable_irq(tsp_info->client->irq);
-
-	/* Enable wacom interrupt after tui exit */
-	epen_disable_mode(0);
 
 	return ret;
 }
