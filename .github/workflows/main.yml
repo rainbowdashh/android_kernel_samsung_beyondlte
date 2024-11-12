@@ -1,35 +1,38 @@
-name: build and release
+name: Build and Release
 
 on:
   workflow_dispatch:
-    inputs:      
+    inputs:
       tag:
-        description: 'Release'
-        required: true        
+        description: 'Release version'
+        required: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check Out
-        uses: actions/checkout@v4
-  
-      - name: Setup KernelSU
-        run: |
-          if [ -d "./KernelSU" ]; then
-            rm -rf "./KernelSU"
-          fi
-          if [ -d "./drivers/kernelsu" ]; then
-            rm -rf "./drivers/kernelsu"
-          fi
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
+    - name: Check Out
+      uses: actions/checkout@v4
 
-      - name: Build
-        run: ./build.sh d2x N
-        
-      - name: Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: build
-          path: ${{ github.workspace }}/build/
+    - name: Setup Environment Variables
+      run: |
+        echo "KERNELSU_VERSION=v0.9.5" >> $GITHUB_ENV
+
+    - name: Cleanup Old Files
+      run: |
+        rm -rf ./KernelSU ./drivers/kernelsu
+
+    - name: Setup KernelSU
+      run: |
+        curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s $KERNELSU_VERSION || { echo "Failed to setup KernelSU"; exit 1; }
+
+    - name: Build
+      run: |
+        ./build.sh d2x N || { echo "Build failed"; exit 1; }
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: build
+        path: ${{ github.workspace }}/build/
